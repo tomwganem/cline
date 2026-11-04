@@ -16,6 +16,7 @@ import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { useProviderModels } from "@/hooks/useProviderModels"
 import { ModelsServiceClient, StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
+import { AutoModelRoutingOption, useAutoModelRouting } from "./AutoModelRoutingOption"
 import { ModelInfoView } from "./common/ModelInfoView"
 import FeaturedModelCard from "./FeaturedModelCard"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
@@ -261,6 +262,8 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({
 	const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 	const dropdownListRef = useRef<HTMLDivElement>(null)
 
+	const autoRouting = useAutoModelRouting(currentMode)
+
 	const handleModelChange = (newModelId: string) => {
 		searchTermEditedByUserRef.current = false
 		setSearchTerm(newModelId)
@@ -268,6 +271,11 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({
 		if (cloudSelection) {
 			cloudSelection.onChange(newModelId)
 			return
+		}
+
+		// Picking a specific model is an explicit choice: leave Auto mode.
+		if (autoRouting.enabled) {
+			void autoRouting.setEnabled(false)
 		}
 
 		const modelInfo = effectiveClineModels?.[newModelId] ?? {
@@ -507,12 +515,13 @@ const ClineModelPicker: React.FC<ClineModelPickerProps> = ({
 
 				{/* Model Cards */}
 				<div style={{ marginBottom: "6px" }}>
+					{!isCloud && visibleTab.id === "recommended" && <AutoModelRoutingOption currentMode={currentMode} />}
 					{visibleTab.id === "clinePass" && cloudSelection?.clinePassNotice}
 					{visibleTab.models.map((model) => (
 						<FeaturedModelCard
 							description={model.description}
 							displayName={model.name || model.id}
-							isSelected={selectedModelId === model.id}
+							isSelected={!autoRouting.enabled && selectedModelId === model.id}
 							key={model.id}
 							label={model.label}
 							onClick={() => {

@@ -1,4 +1,5 @@
 import type {
+	ClineCore,
 	ClineCoreListHistoryOptions,
 	ClineCoreStartInput,
 	CompareCheckpointInput,
@@ -60,7 +61,11 @@ export interface SdkSessionHost {
 	pendingPrompts(action: "delete", input: PendingPromptsDeleteInput): Promise<PendingPromptMutationResult>
 	subscribe(listener: (event: CoreSessionEvent) => void): () => void
 	updateSessionModel?(sessionId: string, modelId: string): Promise<void>
+	/** Updates provider/model/reasoning for subsequent turns (used by Auto model routing). */
+	updateSessionConnection?(sessionId: string, updates: SdkSessionConnectionUpdate): Promise<void>
 }
+
+export type SdkSessionConnectionUpdate = Parameters<ClineCore["updateSessionConnection"]>[1]
 
 export type SdkInitialMessages = NonNullable<StartSessionInput["initialMessages"]>
 

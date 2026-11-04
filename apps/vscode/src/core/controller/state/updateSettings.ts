@@ -166,6 +166,14 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			}
 		}
 
+		// Update Auto model routing (per mode)
+		if (request.planModeAutoModelRouting !== undefined) {
+			controller.stateManager.setGlobalState("planModeAutoModelRouting", !!request.planModeAutoModelRouting)
+		}
+		if (request.actModeAutoModelRouting !== undefined) {
+			controller.stateManager.setGlobalState("actModeAutoModelRouting", !!request.actModeAutoModelRouting)
+		}
+
 		// Update auto-condense setting
 		if (request.useAutoCondense !== undefined) {
 			if (controller.task) {

@@ -289,6 +289,8 @@ message Settings {
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 186;
   optional bool cloud_sessions_enabled = 188;
   optional string open_telemetry_traces_exporter = 189;
+  optional bool plan_mode_auto_model_routing = 190;
+  optional bool act_mode_auto_model_routing = 191;
 }
 
 message State {
@@ -434,6 +436,8 @@ message UpdateSettingsRequest {
   optional string compaction_strategy = 44;
   optional bool web_search_enabled = 45;
   optional bool cloud_sessions_enabled = 46;
+  optional bool plan_mode_auto_model_routing = 47;
+  optional bool act_mode_auto_model_routing = 48;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

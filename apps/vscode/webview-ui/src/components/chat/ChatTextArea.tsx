@@ -229,6 +229,9 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			cloudTaskTarget,
 			currentCloudTask,
 			cloudModelId,
+			planModeAutoModelRouting,
+			actModeAutoModelRouting,
+			autoRoutedModel,
 		} = useExtensionState()
 		// Cloud sessions are Act-only (like the desktop app and the cloud dashboard).
 		// While a cloud task is shown, or a new task is about to run in the cloud,
@@ -1167,6 +1170,11 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 			if (!apiConfiguration) {
 				return unknownModel
 			}
+			// Auto model routing: show the routed model once a turn has been routed.
+			const autoRoutingOn = (mode === "plan" ? planModeAutoModelRouting : actModeAutoModelRouting) === true
+			if (autoRoutingOn && (selectedProvider === "cline" || selectedProvider === "openrouter")) {
+				return autoRoutedModel ? `${selectedProvider}:auto → ${autoRoutedModel.label}` : `${selectedProvider}:auto`
+			}
 			switch (selectedProvider) {
 				case "cline":
 					return `${selectedProvider}:${selectedModelId}`
@@ -1197,7 +1205,17 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 				default:
 					return `${selectedProvider}:${selectedModelId}`
 			}
-		}, [apiConfiguration, mode, selectedProvider, selectedModelId, cloudActOnly, cloudModelId])
+		}, [
+			apiConfiguration,
+			mode,
+			selectedProvider,
+			selectedModelId,
+			cloudActOnly,
+			cloudModelId,
+			planModeAutoModelRouting,
+			actModeAutoModelRouting,
+			autoRoutedModel,
+		])
 
 		// Function to show error message for unsupported files for drag and drop
 		const showUnsupportedFileErrorMessage = () => {

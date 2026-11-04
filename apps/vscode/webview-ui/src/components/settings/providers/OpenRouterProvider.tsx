@@ -6,6 +6,7 @@ import { useExtensionState } from "@/context/ExtensionStateContext"
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { AccountServiceClient } from "@/services/grpc-client"
 import { useOpenRouterKeyInfo } from "../../ui/hooks/useOpenRouterKeyInfo"
+import { AutoModelRoutingOption } from "../AutoModelRoutingOption"
 import { DebouncedTextField } from "../common/DebouncedTextField"
 import OpenRouterModelPicker from "../OpenRouterModelPicker"
 import { formatPrice } from "../utils/pricingUtils"
@@ -113,6 +114,7 @@ export const OpenRouterProvider = ({ showModelOptions, isPopup, currentMode }: O
 				</p>
 			</div>
 
+			{showModelOptions && <AutoModelRoutingOption currentMode={currentMode} />}
 			{showModelOptions && <OpenRouterModelPicker currentMode={currentMode} isPopup={isPopup} showProviderRouting={true} />}
 		</div>
 	)

@@ -125,6 +125,11 @@ export interface ExtensionState {
 	compactionStrategy?: string
 	webSearchEnabled?: boolean
 	subagentsEnabled?: boolean
+	/** "Auto" model routing enabled for plan / act mode. */
+	planModeAutoModelRouting?: boolean
+	actModeAutoModelRouting?: boolean
+	/** Model the router picked for the current task's latest turn (display only). */
+	autoRoutedModel?: { modelId: string; label: string; tier: string }
 	worktreesEnabled?: ClineFeatureSetting
 	favoritedModelIds: string[]
 	// NEW: Add workspace information

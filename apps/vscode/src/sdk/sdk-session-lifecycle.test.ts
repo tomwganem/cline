@@ -238,6 +238,45 @@ describe("SdkSessionLifecycle", () => {
 		expect(lifecycle.getActiveSession()?.isRunning).toBe(false)
 	})
 
+	it("runs beforeTurnSend before a fresh turn is sent (Auto model routing hook)", async () => {
+		const order: string[] = []
+		const sdkHost = makeSdkHost({
+			send: vi.fn(async () => {
+				order.push("send")
+			}),
+		})
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const beforeTurnSend = vi.fn(async () => {
+			order.push("route")
+		})
+		const lifecycle = makeLifecycle({ beforeTurnSend })
+		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
+		await lifecycle.startNewSession({} as any)
+
+		lifecycle.fireAndForgetSend(sdkHost as unknown as SendHost, "session-123", "hello")
+		await vi.waitFor(() => expect(order).toEqual(["route", "send"]))
+		expect(beforeTurnSend).toHaveBeenCalledWith(sdkHost, "session-123", "hello", lifecycle.getActiveSession())
+	})
+
+	it("skips beforeTurnSend for queued prompts and still sends when the hook fails", async () => {
+		const sdkHost = makeSdkHost()
+		mockCreateSessionHost.mockResolvedValueOnce(sdkHost)
+		const beforeTurnSend = vi.fn(async () => {
+			throw new Error("routing failed")
+		})
+		const lifecycle = makeLifecycle({ beforeTurnSend })
+		// biome-ignore lint/suspicious/noExplicitAny: focused fake for lifecycle unit test
+		await lifecycle.startNewSession({} as any)
+
+		lifecycle.fireAndForgetSend(sdkHost as unknown as SendHost, "session-123", "queued", undefined, undefined, "queue")
+		await vi.waitFor(() => expect(sdkHost.send).toHaveBeenCalledTimes(1))
+		expect(beforeTurnSend).not.toHaveBeenCalled()
+
+		lifecycle.fireAndForgetSend(sdkHost as unknown as SendHost, "session-123", "fresh")
+		await vi.waitFor(() => expect(sdkHost.send).toHaveBeenCalledTimes(2))
+		expect(beforeTurnSend).toHaveBeenCalledTimes(1)
+	})
+
 	it("keeps the session running when a send settles after Core started the next queued turn", async () => {
 		const onDidBecomeIdle = vi.fn()
 		let resolveSend: () => void = () => {}

@@ -282,6 +282,10 @@ const USER_SETTINGS_FIELDS = {
 	hooksEnabled: { default: true as boolean },
 	useAutoCondense: { default: true as boolean },
 	subagentsEnabled: { default: false as boolean },
+	// "Auto" model routing per mode. When on, the selected model stays saved as
+	// the fallback, and each turn is routed to a cost tier for that provider.
+	planModeAutoModelRouting: { default: false as boolean },
+	actModeAutoModelRouting: { default: false as boolean },
 	worktreesEnabled: { default: false as boolean },
 	cloudSessionsEnabled: { default: false as boolean },
 	preferredLanguage: { default: "English" as string },

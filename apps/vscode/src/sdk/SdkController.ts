@@ -23,7 +23,13 @@ import {
 	type UserInstructionConfigService,
 } from "@cline/core"
 import { loadCloudModels } from "@cline/core/cloud"
-import { formatDisplayUserInput, type RemoteConfig, type RemoteConfigBundle } from "@cline/shared"
+import {
+	type ConsecutiveMistakeLimitContext,
+	type ConsecutiveMistakeLimitDecision,
+	formatDisplayUserInput,
+	type RemoteConfig,
+	type RemoteConfigBundle,
+} from "@cline/shared"
 import type { ApiConfiguration } from "@shared/api"
 import type { ChatContent } from "@shared/ChatContent"
 import { CLINE_ACCOUNT_AUTH_ERROR_MESSAGE } from "@shared/ClineAccount"
@@ -69,6 +75,7 @@ import { createProviderCatalog } from "./model-catalog/catalog"
 import type { Disposable, ProviderCatalog, ProviderConfigChange, ProviderConfigStore } from "./model-catalog/contracts"
 import { parseProviderId } from "./model-catalog/provider-id"
 import { createProviderConfigStore } from "./model-catalog/store"
+import { AUTO_ROUTING_CONTINUE_PROMPT, SdkAutoRoutingCoordinator } from "./model-routing/sdk-auto-routing-coordinator"
 import {
 	PROVIDER_FAILURE_ERROR_TYPE,
 	PROVIDER_FAILURE_PHASE,
@@ -226,6 +233,7 @@ export class Controller {
 	readonly cloudSessions: CloudSessionsService
 	readonly cloudTaskTarget: SdkCloudTaskTarget
 	private sessionHistory: SdkSessionHistoryLoader
+	private autoRouting: SdkAutoRoutingCoordinator
 	private readonly sdkTelemetry: VscodeSdkTelemetryHandle
 	private readonly providerFailureTelemetryTurnGate = new ProviderFailureTelemetryTurnGate()
 	private readonly providerConfigStore: ProviderConfigStore
@@ -388,10 +396,21 @@ export class Controller {
 			getMinter: () => this.messageTranslatorState.getMinter(),
 		})
 		this.sessionHistory = new SdkSessionHistoryLoader()
+		this.autoRouting = new SdkAutoRoutingCoordinator({
+			stateManager: this.stateManager,
+			emitNotice: (text) =>
+				this.messages.emitHookMessage({
+					ts: this.messageTranslatorState.getMinter().nextId(),
+					type: "say",
+					say: "info",
+					text,
+					partial: false,
+				}),
+		})
 		this.sessionConfigBuilder = new SdkSessionConfigBuilder({
 			stateManager: this.stateManager,
 			emitHookMessage: (msg) => this.messages.emitHookMessage(msg),
-			onConsecutiveMistakeLimitReached: (context) => this.interactions.handleConsecutiveMistakeLimitReached(context),
+			onConsecutiveMistakeLimitReached: (context) => this.handleMistakeLimitWithAutoRouting(context),
 		})
 		this.diffEdits = new SdkDiffEditCoordinator({
 			getCwd: () => this.getWorkspaceRoot(),
@@ -461,6 +480,13 @@ export class Controller {
 			// this.mode is assigned later in this constructor; the closure only
 			// runs at send time, long after construction completes.
 			consumeModeSwitchNotice: (sessionId) => this.mode.consumeModeSwitchNotice(sessionId),
+			beforeTurnSend: async (sdkHost, sessionId, prompt, session) => {
+				const decision = await this.autoRouting.beforeSend(sdkHost, sessionId, prompt, session)
+				if (decision?.changed) {
+					// Refresh the chat-input model badge.
+					void this.postStateToWebview().catch(() => {})
+				}
+			},
 			onSendComplete: async () => {
 				// Normal flows close their diff sessions inline; anything left here is orphaned.
 				void this.diffEdits.discardAllPreviews("turn complete")
@@ -1300,6 +1326,41 @@ export class Controller {
 	}
 
 	/**
+	 * Mistake-limit handler. With Auto model routing active, escalate one tier
+	 * and continue on the stronger model; otherwise stop as before. The SDK
+	 * snapshots the connection when a turn starts, so the stronger model is
+	 * used for the continuation turn sent after this turn stops.
+	 */
+	private async handleMistakeLimitWithAutoRouting(
+		context: ConsecutiveMistakeLimitContext,
+	): Promise<ConsecutiveMistakeLimitDecision> {
+		const activeSession = this.sessions.getActiveSession()
+		const detail = context.details?.trim()
+		const reason = `${context.consecutiveMistakes} consecutive ${context.reason.replace(/_/g, " ")}s`
+		const decision = await this.autoRouting.onMistakeLimit(
+			activeSession?.sdkHost,
+			activeSession?.sessionId,
+			reason,
+			activeSession,
+		)
+		if (!decision || !activeSession) {
+			return this.interactions.handleConsecutiveMistakeLimitReached(context)
+		}
+		const { sdkHost, sessionId } = activeSession
+		// Re-send once this turn has settled: sending into a running turn would queue onto the old model.
+		// The stop decision is returned below, so the turn settles shortly after this callback resolves.
+		void this.sessions.waitForTurnSend(activeSession, 30_000).then((settled) => {
+			if (!settled || this.sessions.getActiveSession() !== activeSession) {
+				return
+			}
+			this.sessions.setRunning(true)
+			this.turnStateTracker.set("streaming")
+			this.sessions.fireAndForgetSend(sdkHost, sessionId, AUTO_ROUTING_CONTINUE_PROMPT)
+		})
+		return { action: "stop", reason: `auto_routing_escalated: ${detail ?? reason}` }
+	}
+
+	/**
 	 * Get the active API provider for the current mode.
 	 */
 	private getActiveProviderId(): string | undefined {
@@ -1661,7 +1722,11 @@ export class Controller {
 		// A cloud task still provisioning has no SDK session for taskControl to end;
 		// stop it here so it cannot re-install its view after the user left.
 		this.cloud.cancelPendingStart()
+		const clearedSessionId = this.sessions?.getActiveSession()?.sessionId
 		await this.taskControl.clearTask()
+		if (clearedSessionId) {
+			this.autoRouting?.resetSession(clearedSessionId)
+		}
 		await this.postStateToWebview()
 	}
 
@@ -2716,6 +2781,7 @@ export class Controller {
 				cloudModelId: isCloudSessionsFeatureEnabled() || currentCloudTask ? this.cloud.getCloudModelId() : undefined,
 				nextCloudModelId: isCloudSessionsFeatureEnabled() || currentCloudTask ? this.cloud.nextCloudModelId() : undefined,
 				clinePassSubscribed: isCloudSessionsFeatureEnabled() ? this.cloud.clinePassSubscribed() : undefined,
+				autoRoutedModel: this.autoRouting?.getRoutedModel(snapshotSession?.sessionId),
 				stateVersion: minter.nextSeq(),
 				epoch: minter.epoch,
 			}

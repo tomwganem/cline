@@ -55,6 +55,12 @@ export interface SdkSessionLifecycleOptions {
 	 * message. Consumed exactly once; null when no switch is pending.
 	 */
 	consumeModeSwitchNotice?: (sessionId: string) => ModeSwitchNotice | null
+	/**
+	 * Runs right before a new (non-queued) turn is sent, after the session is
+	 * known. Auto model routing uses it to swap the session's model for the
+	 * turn. Must never reject; the send proceeds once it settles.
+	 */
+	beforeTurnSend?: (sdkHost: SdkSessionHost, sessionId: string, prompt: string, session: object | undefined) => Promise<void>
 	onDidBecomeIdle?: () => void
 }
 
@@ -538,13 +544,22 @@ export class SdkSessionLifecycle {
 		const notice = this.options.consumeModeSwitchNotice?.(sessionId)
 		const noticedPrompt = notice ? `${formatModeSwitchNotice(notice.from, notice.to)}\n${prompt}` : prompt
 		this.options.onSendStart?.(sessionId)
-		const send = sdkHost.send({
+		const sendInput = {
 			sessionId,
 			prompt: noticedPrompt,
 			userImages: images,
 			userFiles: files,
 			delivery,
-		})
+		}
+		// Queued/steered prompts join a turn already running on its model, so
+		// only fresh turns are offered to the routing hook. A hook failure must
+		// never block the user's message.
+		const beforeTurnSend = delivery === undefined ? this.options.beforeTurnSend : undefined
+		const send = beforeTurnSend
+			? beforeTurnSend(sdkHost, sessionId, prompt, sessionAtSend)
+					.catch((error: unknown) => Logger.warn("[SdkController] beforeTurnSend failed:", error))
+					.then(() => sdkHost.send(sendInput))
+			: sdkHost.send(sendInput)
 		if (sessionAtSend && delivery !== "queue" && delivery !== "steer") {
 			this.turnSends.set(
 				sessionAtSend,
