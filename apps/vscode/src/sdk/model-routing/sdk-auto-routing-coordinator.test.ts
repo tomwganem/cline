@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
 import type { SdkSessionHost } from "../session-host"
-import { buildRoutingConnectionUpdate, SdkAutoRoutingCoordinator } from "./sdk-auto-routing-coordinator"
+import {
+	AUTO_ROUTING_CONTINUE_PROMPT,
+	buildRoutingConnectionUpdate,
+	SdkAutoRoutingCoordinator,
+} from "./sdk-auto-routing-coordinator"
 
 vi.mock("@/shared/services/Logger", () => ({
 	Logger: { log: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -87,6 +91,8 @@ describe("SdkAutoRoutingCoordinator", () => {
 			"s1",
 			expect.objectContaining({ modelId: "anthropic/claude-haiku-5.5" }),
 		)
+		// Re-sending the continuation prompt must not re-classify or emit a second notice.
+		expect(await coordinator.beforeSend(host, "s1", AUTO_ROUTING_CONTINUE_PROMPT, session)).toBeUndefined()
 	})
 
 	it("does not escalate when Auto is off", async () => {

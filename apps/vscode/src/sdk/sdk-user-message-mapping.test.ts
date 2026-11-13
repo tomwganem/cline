@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
 	ACT_MODE_CONTINUATION_PROMPT,
+	AUTO_ROUTING_CONTINUE_PROMPT,
 	extractSdkUserText,
 	findSdkUserMessageIndexByOrdinal,
 	getSdkCheckpointRunCountForMessageIndex,
@@ -13,9 +14,11 @@ import {
 const wrapped = (text: string, mode = "act") => `<user_input mode="${mode}">${text}</user_input>`
 
 describe("isSyntheticUserPrompt", () => {
-	it("flags task resumption and act-mode continuation prompts", () => {
+	it("flags task resumption, act-mode continuation, and auto-routing continuation prompts", () => {
 		expect(isSyntheticUserPrompt("[TASK RESUMPTION] Please continue where you left off.")).toBe(true)
 		expect(isSyntheticUserPrompt(ACT_MODE_CONTINUATION_PROMPT)).toBe(true)
+		expect(isSyntheticUserPrompt(AUTO_ROUTING_CONTINUE_PROMPT)).toBe(true)
+		expect(isSyntheticUserPrompt(wrapped(AUTO_ROUTING_CONTINUE_PROMPT))).toBe(true)
 	})
 
 	it("flags the wrapped persisted shape of synthetic prompts", () => {

@@ -13,6 +13,7 @@ import { useNormalizedApiConfiguration } from "@/hooks/useNormalizedApiConfigura
 import { useProviderConfig } from "@/hooks/useProviderConfig"
 import { StateServiceClient } from "@/services/grpc-client"
 import { highlight } from "../history/HistoryView"
+import { useAutoModelRouting } from "./AutoModelRoutingOption"
 import { ModelInfoView } from "./common/ModelInfoView"
 import ReasoningEffortSelector from "./ReasoningEffortSelector"
 import { filterOpenRouterModelIds, getModeSpecificFields } from "./utils/providerUtils"
@@ -57,11 +58,16 @@ const OpenRouterModelPicker: React.FC<OpenRouterModelPickerProps> = ({ isPopup, 
 	const dropdownRef = useRef<HTMLDivElement>(null)
 	const itemRefs = useRef<(HTMLDivElement | null)[]>([])
 	const dropdownListRef = useRef<HTMLDivElement>(null)
+	const autoRouting = useAutoModelRouting(currentMode)
 
 	const handleModelChange = (newModelId: string) => {
 		// could be setting invalid model id/undefined info but validation will catch it
 
 		setSearchTerm(newModelId)
+
+		if (autoRouting.enabled) {
+			void autoRouting.setEnabled(false)
+		}
 
 		const modelInfo = openRouterModels[newModelId] ?? { ...openAiModelInfoSafeDefaults, name: newModelId }
 

@@ -16,12 +16,12 @@ import type { Mode } from "@shared/storage/types"
 import type { StateManager } from "@/core/storage/StateManager"
 import { toLegacyApiProvider } from "@/shared/model-catalog/provider-helpers"
 import { Logger } from "@/shared/services/Logger"
+import { AUTO_ROUTING_CONTINUE_PROMPT } from "../sdk-user-message-mapping"
 import type { SdkSessionConnectionUpdate, SdkSessionHost } from "../session-host"
 import { AutoModelRouter, formatRoutingNotice, type RoutingDecision } from "./router"
 import { isAutoRoutingSupported, ROUTING_TIER_LABELS, type RoutingTierModel } from "./tiers"
 
-export const AUTO_ROUTING_CONTINUE_PROMPT =
-	"The previous model ran into repeated errors, so this task was escalated to a stronger model. Review the conversation so far, including any partial changes, and continue the task."
+export { AUTO_ROUTING_CONTINUE_PROMPT }
 
 export interface SdkAutoRoutingCoordinatorOptions {
 	stateManager: Pick<StateManager, "getGlobalSettingsKey" | "getApiConfiguration">
@@ -90,6 +90,12 @@ export class SdkAutoRoutingCoordinator {
 			const active = this.isActive()
 			if (!active) {
 				this.applied.delete(sessionId)
+				return undefined
+			}
+			// The escalation continuation prompt has no visible user_feedback bubble and is
+			// purely recovery plumbing: routeTurn must not classify its "errors/escalated"
+			// wording or count it toward the simpler-follow-up downshift streak.
+			if (prompt === AUTO_ROUTING_CONTINUE_PROMPT) {
 				return undefined
 			}
 			const decision = this.router.routeTurn({

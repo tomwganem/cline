@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	supportsImages: true as boolean | undefined,
 	navigateToSettingsModelPicker: vi.fn(),
 	cloudState: {} as Record<string, unknown>,
+	selectedProvider: "anthropic",
 }))
 
 vi.mock("@/context/ExtensionStateContext", () => ({
@@ -30,7 +31,7 @@ vi.mock("@/context/PlatformContext", () => ({
 
 vi.mock("@/hooks/useNormalizedApiConfiguration", () => ({
 	useNormalizedApiConfiguration: () => ({
-		selectedProvider: "anthropic",
+		selectedProvider: mocks.selectedProvider,
 		selectedModelId: "text-only-model",
 		selectedModelInfo: { supportsImages: mocks.supportsImages },
 	}),
@@ -88,6 +89,7 @@ function pasteImage(target: HTMLElement) {
 describe("ChatTextArea model label", () => {
 	beforeEach(() => {
 		mocks.cloudState = {}
+		mocks.selectedProvider = "anthropic"
 	})
 
 	it("shows the local provider, model, and local-only controls for a local task", () => {
@@ -116,6 +118,36 @@ describe("ChatTextArea model label", () => {
 		expect(screen.queryByText(/Type @ for context/)).not.toBeInTheDocument()
 		fireEvent.change(textarea, { target: { value: "@", selectionStart: 1 } })
 		expect(screen.queryByText("Problems")).not.toBeInTheDocument()
+	})
+
+	it("shows auto badge and routed model label when Auto model routing is enabled", () => {
+		mocks.selectedProvider = "cline"
+		mocks.cloudState = { actModeAutoModelRouting: true }
+		const { unmount } = render(
+			<ChatTextArea
+				activeQuote={null}
+				inputValue=""
+				onSelectFilesAndImages={vi.fn()}
+				onSend={vi.fn()}
+				placeholderText="Type a message"
+				selectedFiles={[]}
+				selectedImages={[]}
+				sendingDisabled={false}
+				setInputValue={vi.fn()}
+				setSelectedFiles={vi.fn()}
+				setSelectedImages={vi.fn()}
+				shouldDisableFilesAndImages={false}
+			/>,
+		)
+		expect(screen.getByTitle("Open API Settings")).toHaveTextContent("cline:auto")
+		unmount()
+
+		mocks.cloudState = {
+			actModeAutoModelRouting: true,
+			autoRoutedModel: { modelId: "anthropic/claude-haiku-5.5", label: "Haiku 5.5", tier: "standard" },
+		}
+		renderTextArea()
+		expect(screen.getByTitle("Open API Settings")).toHaveTextContent("cline:auto → Haiku 5.5")
 	})
 })
 

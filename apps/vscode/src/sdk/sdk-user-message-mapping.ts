@@ -1,6 +1,14 @@
 import { normalizeUserInput, stripModeNotices } from "@cline/shared"
 
 /**
+ * Canned prompt SdkAutoRoutingCoordinator sends after escalating a task on
+ * mistake-limit failure. Defined in this leaf module so display-layer consumers
+ * (message-translator, ordinal mapping) don't pull the coordinator's import graph.
+ */
+export const AUTO_ROUTING_CONTINUE_PROMPT =
+	"The previous model ran into repeated errors, so this task was escalated to a stronger model. Review the conversation so far, including any partial changes, and continue the task."
+
+/**
  * Canned prompt SdkModeCoordinator sends to drive the plan -> act
  * auto-continuation. Defined here (a leaf module) rather than in the
  * coordinator so display-layer consumers (message-translator, ordinal
@@ -58,6 +66,7 @@ export function isSyntheticUserPrompt(text: string): boolean {
 	return (
 		normalized.startsWith("[TASK RESUMPTION]") ||
 		normalized === ACT_MODE_CONTINUATION_PROMPT ||
+		normalized === AUTO_ROUTING_CONTINUE_PROMPT ||
 		// Hook-injected context is model-facing only; the runtime stamps these
 		// messages displayRole "system", and this text guard keeps transcripts
 		// clean on paths where that metadata is unavailable.
